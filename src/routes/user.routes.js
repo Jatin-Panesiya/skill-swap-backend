@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   getActiveMatches,
   getLoggedInUser,
+  getUserById,
   getUsers,
   loginUser,
   logoutUser,
@@ -17,6 +18,7 @@ userRouter.post("/login", loginUser);
 userRouter.get("/logout", logoutUser);
 userRouter.put("/update-user/:id", authenticate, updateUser);
 userRouter.get("/get-user", authenticate, getLoggedInUser);
+userRouter.get("/get-user/:id", authenticate, getUserById);
 userRouter.get("/get-all", authenticate, getUsers);
 userRouter.get("/get-active-matches", authenticate, getActiveMatches);
 
