@@ -113,3 +113,26 @@ export const updateUser = async (req, res) => {
     res.status(500).json({ message: error.message || "Internal Server Error" });
   }
 };
+
+export const getActiveMatches = async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const query = {
+      _id: { $ne: userId },
+      teachSkills: { $in: user.learnSkills },
+    };
+
+    const matches = await User.find(query);
+
+    res.status(200).json({ matches });
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Internal Server Error" });
+  }
+};
