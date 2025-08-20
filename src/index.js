@@ -15,7 +15,7 @@ app.use(cookieParser());
 
 app.use(
   cors({
-    credentials: true, // if you're using cookies/auth
+    credentials: true,
   })
 );
 

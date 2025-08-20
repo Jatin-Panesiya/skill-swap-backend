@@ -1,7 +1,6 @@
 import { User } from "../models/user.model.js";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/utils.js";
-import jwt from "jsonwebtoken";
 
 export const registerUser = async (req, res) => {
   try {
@@ -63,17 +62,14 @@ export const loginUser = async (req, res) => {
 
 export const getLoggedInUser = async (req, res) => {
   try {
-    const token = req.cookies.token;
+    const userId = req.user.userId;
 
-    if (!token) {
-      return res.status(401).json({ message: "Not logged in" });
-    }
+    const user = await User.findById(userId);
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
-    const user = await User.findById(decoded.userId).select("-password");
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
+
     res.status(200).json({ user });
   } catch (error) {
     res.status(500).json({ message: error.message || "Internal Server Error" });
@@ -116,7 +112,7 @@ export const updateUser = async (req, res) => {
 
 export const getActiveMatches = async (req, res) => {
   try {
-    const userId = req.params.id;
+    const userId = req.user.userId;
 
     const user = await User.findById(userId);
 
@@ -127,11 +123,36 @@ export const getActiveMatches = async (req, res) => {
     const query = {
       _id: { $ne: userId },
       teachSkills: { $in: user.learnSkills },
+      learnSkills: { $in: user.teachSkills }
     };
 
     const matches = await User.find(query);
 
     res.status(200).json({ matches });
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Internal Server Error" });
+  }
+};
+
+export const getUsers = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const search = req.query.search;
+    const filterKey = req.query.filterKey;
+
+    const query = {
+      _id: { $ne: userId },
+    };
+
+    if (search && filterKey === "name") {
+      query.name = { $regex: search, $options: "i" }
+    } else if (search && filterKey === "skill") {
+      query.teachSkills = { $regex: search, $options: "i" }
+    }
+
+    const users = await User.find(query);
+
+    res.status(200).json(users);
   } catch (error) {
     res.status(500).json({ message: error.message || "Internal Server Error" });
   }
