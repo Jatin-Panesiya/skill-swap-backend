@@ -1,24 +1,50 @@
 import { User } from "../models/user.model.js";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/utils.js";
+import { USER_ROLES } from "../utils/constants.js";
 
 export const registerUser = async (req, res) => {
   try {
-    const { email, password, name } = req.body;
+    const { email, password, name, role, teachSkills, learnSkills } = req.body;
     if (!email || !password || !name) {
       return res.status(400).json({ message: "All fields are required" });
+    }
+
+    if (role && role !== USER_ROLES.USER && role !== USER_ROLES.ADMIN) {
+      return res.status(400).json({ message: "Invalid role. Must be USER or ADMIN" });
+    }
+
+    if (!teachSkills || !Array.isArray(teachSkills) || teachSkills.length === 0) {
+      return res.status(400).json({ message: "At least one teaching skill is required" });
+    }
+
+    if (!learnSkills || !Array.isArray(learnSkills) || learnSkills.length === 0) {
+      return res.status(400).json({ message: "At least one learning skill is required" });
     }
 
     const newUser = new User({
       email,
       password,
       name,
+      teachSkills,
+      learnSkills,
+      ...(role && { role }),
     });
 
     await newUser.save();
+
+    const token = generateToken({ userId: newUser._id });
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
     res
       .status(201)
-      .json({ user: newUser, message: "User registered successfully" });
+      .json({ user: newUser, message: "User registered and logged in successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message || "Internal Server Error" });
   }
@@ -48,10 +74,10 @@ export const loginUser = async (req, res) => {
     const token = generateToken({ userId: user._id });
 
     res.cookie("token", token, {
-      httpOnly: true, // 🔒 prevents JS access
-      secure: true, // 🔒 only over HTTPS
-      sameSite: "strict", // ⛔️ CSRF protection
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     res.status(201).json({ message: "User logged in successfully" });
@@ -80,8 +106,8 @@ export const logoutUser = async (req, res) => {
   try {
     res.clearCookie("token", {
       httpOnly: true,
-      secure: true,
-      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
     });
 
     res.status(200).json({ message: "Logged out successfully" });
@@ -122,6 +148,7 @@ export const getActiveMatches = async (req, res) => {
 
     const query = {
       _id: { $ne: userId },
+      role: { $ne: USER_ROLES.ADMIN },
       teachSkills: { $in: user.learnSkills },
       learnSkills: { $in: user.teachSkills }
     };
@@ -142,6 +169,7 @@ export const getUsers = async (req, res) => {
 
     const query = {
       _id: { $ne: userId },
+      role: { $ne: USER_ROLES.ADMIN },
     };
 
     if (search && filterKey === "name") {
@@ -169,6 +197,36 @@ export const getUserById = async (req, res) => {
     }
 
     res.status(200).json({ user });
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Internal Server Error" });
+  }
+};
+
+export const getAllUsersAdmin = async (req, res) => {
+  try {
+    const users = await User.find({}).select("-password");
+    res.status(200).json(users);
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Internal Server Error" });
+  }
+};
+
+export const deleteUserAdmin = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const currentUserId = req.user.userId;
+
+    if (userId === currentUserId) {
+      return res.status(400).json({ message: "You cannot delete your own account" });
+    }
+
+    const user = await User.findByIdAndDelete(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({ message: "User deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message || "Internal Server Error" });
   }
